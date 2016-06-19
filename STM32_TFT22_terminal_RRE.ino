@@ -3,20 +3,24 @@
 // https://www.youtube.com/watch?v=OgaLXoLhz4g
 // https://www.youtube.com/watch?v=DAAbDGCeQ1o
 /*
-CONNECTIONS:
-------------
-STM32:
-For programming via serial:
-Tools/Board set to Generic STM32F103C
-Tools/Upload set to Serial
-Top jumper set to 1, press the button before uploading
+  CONNECTIONS:
+  (for STM32F103C8T6 ARM STM32 Minimum System Development Board
+  like the board used in Pawel A. Hernik's videos)
+  https://www.youtube.com/watch?v=OgaLXoLhz4g
+  https://www.youtube.com/watch?v=DAAbDGCeQ1o
+  ------------
+  STM32:
+    For programming via serial:
+    Tools/Board set to Generic STM32F103C
+    Tools/Upload set to Serial
+    Top jumper set to 1, press the button before uploading
 
   PA9 /TX to PC RX (VIOLET)
   PA10/RX to PC TX (GREY)
   3V3              (RED)
   GND              (BLUE)
 
- STM32 SPI1 pins:
+  STM32 SPI1 pins:
   PA4 CS1
   PA5 SCK1
   PA6 MISO1
@@ -25,7 +29,7 @@ Top jumper set to 1, press the button before uploading
   PA11 RST
   PA12 DC
 
-TFT2.2 ILI9341 from top left:
+  TFT2.2 ILI9341 from top left:
   MISO  PA6
   LED   +3.3V
   SCK   PA5
@@ -35,8 +39,39 @@ TFT2.2 ILI9341 from top left:
   CS    PA4
   GND   GND
   VCC   +3.3V
-
 */
+
+/*
+  CONNECTIONS:
+  (for Maple Mini or clone boards)
+
+  For programming via bootloader:
+    Tools/Board set to Maple Mini
+    Tools/Bootloader version set to Bootloader 2.0 (any will do)
+
+    Press the reset button when bootloader message appears if
+    Maple Mini doesn't automatically reboot.
+
+  Maple SPI1 pins:
+    CS1    7 / PA4
+    SCK1   6 / PA5
+    MISO1  5 / PA6
+    MOSI1  4 / PA7
+
+  TFT2.2 ILI9341 from top left:
+    MISO  5  / PA6
+    LED   +3.3V
+    SCK   6  / PA5
+    MOSI  4  / PA7
+    DC    21 / PA14
+    RST   22 / PA13
+    CS    7  / PA4
+    GND   GND
+    VCC   +3.3V
+*/
+
+#define SERIAL_PORT Serial1
+
 #include <Arduino.h>
 #include "SPI.h"
 
@@ -59,13 +94,21 @@ int sy = 1;
 int horizontal = -1;
 int scrollMode = 1;
 
-#define WRAP_PIN    PB9
-#define HORIZ_PIN   PB8
-#define TFT_CS      PA4                  
-#define TFT_DC      PA12              
-#define TFT_RST     PA11 
-Adafruit_ILI9341_STM tft = Adafruit_ILI9341_STM(TFT_CS, TFT_DC, TFT_RST); // Use hardware SPI
+//STM32F103 pin mapping
+//#define WRAP_PIN    PB9
+//#define HORIZ_PIN   PB8
+//#define TFT_DC      PA12
+//#define TFT_RST     PA11
 
+//Maple Mini Mapping
+#define WRAP_PIN    PB6
+#define HORIZ_PIN   PB7
+#define TFT_DC      PA14
+#define TFT_RST     PA13
+
+#define TFT_CS      PA4
+
+Adafruit_ILI9341_STM tft = Adafruit_ILI9341_STM(TFT_CS, TFT_DC, TFT_RST); // Use hardware SPI
 
 // Uncomment below the font you find the most readable for you
 // 7x8 bold - perfect for small term font
@@ -117,125 +160,135 @@ int charYoffs = 1;
 //int charYoffs = 0;
 
 void drawChar(int16_t x, int16_t y, unsigned char c,
-              uint16_t color, uint16_t bg, uint8_t sx, uint8_t sy) 
+              uint16_t color, uint16_t bg, uint8_t sx, uint8_t sy)
 {
-  if((x >= screenWd)              || // Clip right
-     (y >= screenHt)              || // Clip bottom
-     ((x + charWd * sx - 1) < 0)  || // Clip left
-     ((y + charHt * sy - 1) < 0))    // Clip top
+  if ((x >= screenWd)              || // Clip right
+      (y >= screenHt)              || // Clip bottom
+      ((x + charWd * sx - 1) < 0)  || // Clip left
+      ((y + charHt * sy - 1) < 0))    // Clip top
     return;
-  if(c>127) return;
+  if (c > 127) return;
   uint16_t recIdx = fontOffs[c];
-  uint16_t recNum = fontOffs[c+1]-recIdx;
-  if(bg && bg!=color) tft.fillRect(x, y, charWd*sx, charHt*sy, bg);
-  if(charWd<=16 && charHt<=16)
-    for(int i=0; i<recNum; i++) {
-      int v = fontRects[i+recIdx];
+  uint16_t recNum = fontOffs[c + 1] - recIdx;
+  if (bg && bg != color) tft.fillRect(x, y, charWd * sx, charHt * sy, bg);
+  if (charWd <= 16 && charHt <= 16)
+    for (int i = 0; i < recNum; i++) {
+      int v = fontRects[i + recIdx];
       int xf = v & 0xf;
-      int yf = charYoffs+((v & 0xf0)>>4);
-      int wf = 1+((v & 0xf00)>>8);
-      int hf = 1+((v & 0xf000)>>12);
-      tft.fillRect(x+xf*sx, y+yf*sy, bold+wf*sx, hf*sy, color);
+      int yf = charYoffs + ((v & 0xf0) >> 4);
+      int wf = 1 + ((v & 0xf00) >> 8);
+      int hf = 1 + ((v & 0xf000) >> 12);
+      tft.fillRect(x + xf * sx, y + yf * sy, bold + wf * sx, hf * sy, color);
     }
   else
-    for(int i=0; i<recNum; i++) {
+    for (int i = 0; i < recNum; i++) {
       uint8_t *rects = (uint8_t*)fontRects;
-      int idx = (i+recIdx)*3;
-      int xf = rects[idx+0] & 0x3f;
-      int yf = rects[idx+1] & 0x3f;
-      int wf = 1+rects[idx+2] & 0x3f;
-      int hf = 1+(((rects[idx+0] & 0xc0)>>6) | ((rects[idx+1] & 0xc0)>>4) | ((rects[idx+2] & 0xc0)>>2));
-      tft.fillRect(x+xf*sx, y+yf*sy, bold+wf*sx, hf*sy, color);
+      int idx = (i + recIdx) * 3;
+      int xf = rects[idx + 0] & 0x3f;
+      int yf = rects[idx + 1] & 0x3f;
+      int wf = 1 + rects[idx + 2] & 0x3f;
+      int hf = 1 + (((rects[idx + 0] & 0xc0) >> 6) | ((rects[idx + 1] & 0xc0) >> 4) | ((rects[idx + 2] & 0xc0) >> 2));
+      tft.fillRect(x + xf * sx, y + yf * sy, bold + wf * sx, hf * sy, color);
     }
 }
 
 void scroll()
 {
-  xp=0;
-  yp+=charHt*sy;
-  if(yp+charHt>screenHt) yp=0;
-  tft.fillRect(0, yp, screenWd, charHt*sy, ILI9341_BLACK);
-  if(scrollMode)
-    scrollFrame(320-yp-charHt*sy);
+  xp = 0;
+  yp += charHt * sy;
+  if (yp + charHt > screenHt) yp = 0;
+  tft.fillRect(0, yp, screenWd, charHt * sy, ILI9341_BLACK);
+  if (scrollMode)
+    scrollFrame(320 - yp - charHt * sy);
   else
     scrollFrame(0);
 }
 
 int escMode = 0;
 int nVals = 0;
-int vals[10]={0};
+int vals[10] = {0};
 
 void printChar(char c)
 {
-  if(c==0x1b) { escMode=1; return; }
-  if(escMode==1) {
-    if(c=='[') { escMode=2; nVals=0; } else escMode=0;
+  if (c == 0x1b) {
+    escMode = 1;
     return;
   }
-  if(escMode==2) {
-    if(isdigit(c))
-      vals[nVals] = vals[nVals]*10+(c-'0');
-    else if(c==';')
+  if (escMode == 1) {
+    if (c == '[') {
+      escMode = 2;
+      nVals = 0;
+    } else escMode = 0;
+    return;
+  }
+  if (escMode == 2) {
+    if (isdigit(c))
+      vals[nVals] = vals[nVals] * 10 + (c - '0');
+    else if (c == ';')
       nVals++;
-    else if(c=='m') {
-      escMode=0;
+    else if (c == 'm') {
+      escMode = 0;
       nVals++;
-      for(int i=0;i<nVals;i++) {
+      for (int i = 0; i < nVals; i++) {
         int v = vals[i];
         static const uint16_t colors[] = {
-              0x0000, // 0-black
-              0xf800, // 1-red
-              0x0780, // 2-green
-              0xfe00, // 3-yellow
-              0x001f, // 4-blue
-              0xf81f, // 5-magenta
-              0x07ff, // 6-cyan
-              0xffff  // 7-white
+          0x0000, // 0-black
+          0xf800, // 1-red
+          0x0780, // 2-green
+          0xfe00, // 3-yellow
+          0x001f, // 4-blue
+          0xf81f, // 5-magenta
+          0x07ff, // 6-cyan
+          0xffff  // 7-white
         };
-        if(v == 0){ // all attributes off
-          if(nVals==1) {
+        if (v == 0) { // all attributes off
+          if (nVals == 1) {
             fg = ILI9341_WHITE;
             bg = ILI9341_BLACK;
           }
           bold = 0;
-        } else
-        if(v == 1){ // all attributes off
+        } else if (v == 1) { // all attributes off
           bold = 1;
-        } else
-        if(v >= 30 && v < 38){ // fg colors
-          fg = colors[v-30]; 
-        } else if(v >= 40 && v < 48){
-          bg = colors[v-40]; 
-        }          
+        } else if (v >= 30 && v < 38) { // fg colors
+          fg = colors[v - 30];
+        } else if (v >= 40 && v < 48) {
+          bg = colors[v - 40];
+        }
       }
-      vals[0]=vals[1]=vals[2]=vals[3]=0;
-      nVals=0;
+      vals[0] = vals[1] = vals[2] = vals[3] = 0;
+      nVals = 0;
     } else {
-      escMode=0;
-      vals[0]=vals[1]=vals[2]=vals[3]=0;
-      nVals=0;
+      escMode = 0;
+      vals[0] = vals[1] = vals[2] = vals[3] = 0;
+      nVals = 0;
     }
     return;
   }
-  if(c==10) { scroll(); return; }
-  if(c==13) { xp=0; return; }
-  if(c==8) { 
-    if(xp>0) xp-=charWd*sx; 
-    tft.fillRect(xp, yp, charWd*sx, charHt*sy, ILI9341_BLACK);
-    return; 
+  if (c == 10) {
+    scroll();
+    return;
   }
-  if(xp<screenWd)
+  if (c == 13) {
+    xp = 0;
+    return;
+  }
+  if (c == 8) {
+    if (xp > 0) xp -= charWd * sx;
+    tft.fillRect(xp, yp, charWd * sx, charHt * sy, ILI9341_BLACK);
+    return;
+  }
+  if (xp < screenWd)
     drawChar(xp, yp, c, fg, bg, sx, sy);
-  xp+=charWd*sx;
-  if(xp>=screenWd && wrap) scroll();
+  xp += charWd * sx;
+  if (xp >= screenWd && wrap) scroll();
 }
 
 void printString(char *str)
 {
-  while(*str) printChar(*str++);
+  while (*str) printChar(*str++);
 }
 
-void setupScroll(uint16_t tfa, uint16_t bfa) 
+void setupScroll(uint16_t tfa, uint16_t bfa)
 {
   tft.writecommand(ILI9341_VSCRDEF); // Vertical scroll definition
   tft.writedata(tfa >> 8);
@@ -246,7 +299,7 @@ void setupScroll(uint16_t tfa, uint16_t bfa)
   tft.writedata(bfa);
 }
 
-void scrollFrame(uint16_t vsp) 
+void scrollFrame(uint16_t vsp)
 {
   tft.writecommand(ILI9341_VSCRSADD); // Vertical scrolling start address
   tft.writedata(vsp >> 8);
@@ -257,7 +310,7 @@ void checkButtons()
 {
   wrap = digitalRead(WRAP_PIN) ? 0 : 1;
   int orient = digitalRead(HORIZ_PIN) ? 0 : 1;
-  if(orient!=horizontal) {
+  if (orient != horizontal) {
     horizontal = orient;
     scrollMode = horizontal ? 0 : 1;
     tft.setRotation(horizontal ? 1 : 2);
@@ -267,14 +320,14 @@ void checkButtons()
 }
 
 void setup() {
-  Serial.begin(115200);
+  SERIAL_PORT.begin(115200);
   pinMode(WRAP_PIN,  INPUT_PULLUP);
   pinMode(HORIZ_PIN, INPUT_PULLUP);
   tft.begin();
-//  tft.setRotation(2);
+  //  tft.setRotation(2);
   setupScroll(0, 0);
   checkButtons();
-  
+
   tft.setCursor(0, 0);
   tft.fillScreen(ILI9341_BLACK);
   sx = 1;
@@ -283,11 +336,12 @@ void setup() {
   sy = 1;
 }
 
-
-void loop(void) 
+void loop(void)
 {
   checkButtons();
-  while(Serial.available())
-    printChar(Serial.read());
+  while (SERIAL_PORT.available())
+  {
+    printChar(SERIAL_PORT.read());
+  }
 }
 
